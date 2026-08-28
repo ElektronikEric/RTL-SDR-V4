@@ -1,4 +1,3 @@
-from __future__ import annotations
 import numpy as np
 
 
@@ -16,6 +15,4 @@ class FirDesign:
 
     @staticmethod
     def bandpass_fir(low_hz: float, high_hz: float, fs_hz: float, num_taps: int = 257) -> np.ndarray:
-        h_high = FirDesign.lowpass_fir(high_hz, fs_hz, num_taps)
-        h_low = FirDesign.lowpass_fir(low_hz, fs_hz, num_taps)
-        return (h_high - h_low).astype(np.float32)
+        return (FirDesign.lowpass_fir(high_hz, fs_hz, num_taps) - FirDesign.lowpass_fir(low_hz, fs_hz, num_taps)).astype(np.float32)

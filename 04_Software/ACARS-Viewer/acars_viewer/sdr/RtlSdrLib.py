@@ -1,13 +1,12 @@
-from __future__ import annotations
 import ctypes
 
 
 class RtlSdrLib:
     def __init__(self, dll_path: str):
         self.lib = ctypes.CDLL(dll_path)
-        self._setup_signatures()
+        self._setup()
 
-    def _setup_signatures(self):
+    def _setup(self):
         p_dev = ctypes.c_void_p
         self.lib.rtlsdr_get_device_count.restype = ctypes.c_uint
         self.lib.rtlsdr_get_device_count.argtypes = []
@@ -37,6 +36,4 @@ class RtlSdrLib:
         self.lib.rtlsdr_reset_buffer.argtypes = [p_dev]
 
         self.lib.rtlsdr_read_sync.restype = ctypes.c_int
-        self.lib.rtlsdr_read_sync.argtypes = [
-            p_dev, ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int)
-        ]
+        self.lib.rtlsdr_read_sync.argtypes = [p_dev, ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
