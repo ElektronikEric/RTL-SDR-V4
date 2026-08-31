@@ -77,46 +77,65 @@ class AcarsViewerApp:
             print(f"  RAW : {m.raw_bytes_hex}")
 
     def _plot_loop(self):
-        fig, ax = plt.subplots(figsize=(11, 4))
-        x = np.linspace(0, self.acars_cfg.audio_rate_hz / 2, 1025)
-        y = np.full_like(x, -80.0)
-        line, = ax.plot(x, y)
-        ax.set_ylim(-90, 40)
-        ax.set_xlim(0, self.acars_cfg.audio_rate_hz / 2)
-        ax.set_title("ACARS Audio-Spektrum")
-        ax.grid(True, alpha=0.3)
-        text = ax.text(0.01, 0.96, "", transform=ax.transAxes, va="top")
-
+        fig, ax = plt.subplots(figsize=(11, 5))
+    
+        N = 16384
+    
+        x = np.linspace(
+            -self.radio_cfg.sample_rate_hz / 2,
+            self.radio_cfg.sample_rate_hz / 2,
+            N
+        )
+    
+        line, = ax.plot(x / 1000, np.full(N, -100.0))
+    
+        ax.set_xlim(
+            -self.radio_cfg.sample_rate_hz / 2 / 1000,
+            self.radio_cfg.sample_rate_hz / 2 / 1000
+        )
+        ax.set_ylim(-100, 0)
+    
+        ax.set_xlabel("Offset [kHz]")
+        ax.set_ylabel("Magnitude [dB]")
+        ax.set_title("RTL-SDR IQ-Spektrum")
+        ax.grid(True)
+    
         def update(_):
             latest = None
+    
             while True:
                 try:
-                    latest = self.audio_q.get_nowait()
+                    latest = self.iq_q.get_nowait()
                 except queue.Empty:
                     break
-
-            if latest is not None and len(latest) >= 2048:
-                N = 2048
-                w = np.hanning(N)
-                spec = np.fft.rfft(latest[:N] * w)
-                psd = 20 * np.log10(np.abs(spec) + 1e-9)
-                fx = np.fft.rfftfreq(N, d=1.0 / self.acars_cfg.audio_rate_hz)
-                line.set_data(fx, psd)
-
-            last = None
-            while True:
-                try:
-                    last = self.msg_q.get_nowait()
-                except queue.Empty:
-                    break
-            if last is not None:
-                text.set_text(f"Last: conf={last.confidence:.2f} | {last.text[:70]}")
-                t = time.strftime("%H:%M:%S", time.localtime(last.timestamp))
-                print(f"[{t}] {last.text}")
-
-            return line, text
-
-        animation.FuncAnimation(fig, update, interval=100, blit=False, cache_frame_data=False)
+    
+            if latest is not None and len(latest) >= N:
+    
+                iq = latest[:N]
+    
+                window = np.hanning(N)
+    
+                spectrum = np.fft.fftshift(
+                    np.fft.fft(iq * window)
+                )
+    
+                magnitude = 20 * np.log10(
+                    np.abs(spectrum) / N + 1e-12
+                )
+    
+                line.set_data(x / 1000, magnitude)
+    
+            return line,
+    
+        self.anim = animation.FuncAnimation(
+            fig,
+            update,
+            interval=100,
+            blit=False,
+            cache_frame_data=False
+        )
+    
         plt.tight_layout()
         plt.show()
+    
         self.running = False
