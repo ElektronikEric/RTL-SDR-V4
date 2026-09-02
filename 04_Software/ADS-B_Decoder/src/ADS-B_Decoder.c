@@ -7,7 +7,7 @@
  * aber mit ADS-B-spezifischer Demodulation/Dekodierung inspiriert von
  * Dump1090 (https://github.com/flightaware/dump1090):
  *
- *   RTL-SDR IQ (2 MSps, 1090 MHz) 
+ *   RTL-SDR IQ (2 MSps, 1090 MHz)
  *     -> Ringpuffer
  *     -> IQ-Magnitude (|I|^2 + |Q|^2) zur Pulse-Erkennung
  *     -> Burst-Erkennung (Magnitude-Squelch)
