@@ -87,7 +87,7 @@ static const char *DLL_PATH = "rtlsdr.dll";
 #define MODE_S_DATA_BYTES  14
 
 /* Squelch / Burst-Erkennung */
-#define SQUELCH_RATIO      6.0
+#define SQUELCH_RATIO      25.0
 #define SQUELCH_HANGTIME_SEC 0.002     /* 2 ms - Mode S Frames sind kurz */
 #define MAX_BURST_SEC      0.002       /* 2 ms - max Frame-Dauer */
 #define MIN_BURST_SEC      0.0001      /* 0.1 ms */
@@ -187,6 +187,13 @@ static void ring_init(RingBuffer *r, size_t capacity) {
     InitializeConditionVariable(&r->not_empty);
 }
 
+/* ============================================================
+ * SCHRITT 4: RINGPUFFER-OPERATIONEN (DATEN-PUFFER)
+ * ============================================================
+ * Der Ringpuffer ist eine FIFO-Warteschlange zwischen:
+ *  - Producer: capture_thread (ADC-Daten kommen herein)
+ *  - Consumer: main_thread (Daten gehen heraus zur Verarbeitung)
+*/
 static void ring_push(RingBuffer *r, const unsigned char *data, size_t len) {
     EnterCriticalSection(&r->lock);
     if (len > r->capacity) len = r->capacity;
@@ -578,19 +585,47 @@ static BOOL WINAPI console_handler(DWORD signal) {
 
 typedef struct { RtlSdr *sdr; } CaptureThreadArgs;
 
+/* ============================================================
+ * SCHRITT 3: CALLBACK - HIER KOMMEN DIE RAW ADC-DATEN AN!
+ * ============================================================ */
+
+/* WICHTIG: Diese Funktion wird vom RTL-SDR-Treiber aufgerufen,
+   Sie wird aufgerufen, sobald neue Daten da sind. */
 static void __cdecl rtlsdr_callback(unsigned char *buf, uint32_t len, void *ctx) {
     (void)ctx;
     if (g_stop) return;
+    /* ╔═══════════════════════════════════════════════════════════╗
+       ║ buf    = Pointer zu RAW ADC-Daten vom RTL-SDR-Chip      ║
+       ║ len    = Länge in BYTES (z.B. 16384)                     ║
+       ║ ctx    = Context (unused)                                ║
+       ╚═══════════════════════════════════════════════════════════╝
+
+       buf zeigt auf Speicher, der DIREKT VOM RTL-SDR-CHIP kommt!
+       Format: [I0, Q0, I1, Q1, I2, Q2, ...] (8-Bit unsigned)
+
+       Beispiel (echte Bytes vom Chip):
+       buf = [0x80, 0x7F, 0x82, 0x7D, 0x7E, 0x81, 0x7C, 0x83, ...]
+             └─┬─┘ └─┬─┘ └─┬─┘ └─┬─┘ └─┬─┘ └─┬─┘ └─┬─┘ └─┬─┘
+              I0   Q0   I1   Q1   I2   Q2   I3   Q3  ...
+    */
     ring_push(&g_ring, buf, len);
 }
 
 static DWORD WINAPI capture_thread_fn(LPVOID arg) {
     CaptureThreadArgs *args = (CaptureThreadArgs *)arg;
+    /* rtlsdr_read_async startet die asynchrone Erfassung:
+       - Liest ADC-Daten direkt vom RTL-SDR-Chip
+       - Ruft rtlsdr_callback IMMER AUF, wenn neue Daten da sind
+       - Blockiert solange der Prozess läuft
+    */
     args->sdr->read_async(args->sdr->dev, rtlsdr_callback, NULL, 16, 16384);
     return 0;
 }
 
 int main(void) {
+	/* ============================================================
+	 * SCHRITT 1: HARDWARE-INITIALISIERUNG
+	 * ============================================================ */
     RtlSdr sdr;
     if (!rtlsdr_load(&sdr, DLL_PATH)) return 1;
 
@@ -628,6 +663,10 @@ int main(void) {
     squelch_init(&squelch, IQ_SAMPLE_RATE, on_burst_complete);
 
     CaptureThreadArgs cap_args = { &sdr };
+    /* ============================================================
+     * SCHRITT 2: CAPTURE-THREAD (HIER LÄUFT DIE HARDWARE-ERFASSUNG)
+     * HIER STARTET DIE ADC-ERFASSUNG
+     * ============================================================ */
     HANDLE cap_thread = CreateThread(NULL, 0, capture_thread_fn, &cap_args, 0, NULL);
 
     unsigned char *iq_bytes = malloc((size_t)NUM_IQ_SAMPLES * 2);
@@ -637,32 +676,44 @@ int main(void) {
     QueryPerformanceFrequency(&freq_perf);
     QueryPerformanceCounter(&status_last);
 
+    /* ============================================================
+     * SCHRITT 5: MAIN-LOOP - VERARBEITET DIE ADC-DATEN
+     * ============================================================ */
     while (!g_stop) {
         if (!ring_pop(&g_ring, iq_bytes, (size_t)NUM_IQ_SAMPLES * 2, &g_stop)) break;
 
+        /* ╔════════════════════════════════════════════════════════╗
+           ║ iq_bytes enthält JETZT die RAW ADC-Daten!            ║
+           ║ Format: [I0, Q0, I1, Q1, I2, Q2, ...]               ║
+           ║ Länge: NUM_IQ_SAMPLES * 2 Bytes                      ║
+           ║       (z.B. 20000 Samples × 2 = 40000 Bytes)        ║
+           ╚════════════════════════════════════════════════════════╝
+        */
+        /* SCHRITT 6: Konvertiere zu Magnitude (I²+Q²) */
         iq_bytes_to_magnitude(iq_bytes, NUM_IQ_SAMPLES, chunk_mag);
+        /* SCHRITT 7: Squelch + Burst-Erkennung */
         squelch_push(&squelch, chunk_mag, NUM_IQ_SAMPLES);
 
-        QueryPerformanceCounter(&status_now);
-        double elapsed = (double)(status_now.QuadPart - status_last.QuadPart) / freq_perf.QuadPart;
-        if (elapsed > 0.5) {
-            status_last = status_now;
-            const char *state = squelch.in_burst ? "SIGNAL" : "ruhig ";
-            if (squelch.have_noise_floor) {
-                double thr = squelch.noise_floor * SQUELCH_RATIO;
-                double ratio = squelch.smoothed_power / (thr > 0 ? thr : 1e-12);
-                int bar_len = (int)(ratio * 20);
-                if (bar_len > 40) bar_len = 40;
-                if (bar_len < 0) bar_len = 0;
-                char bar[41];
-                memset(bar, '#', bar_len);
-                bar[bar_len] = 0;
-                printf("\r[%s] Pegel/Schwelle=%.2f |%-40s|   ", state, ratio, bar);
-            } else {
-                printf("\r[%s] Rauschboden wird kalibriert...   ", state);
-            }
-            fflush(stdout);
-        }
+//        QueryPerformanceCounter(&status_now);
+//        double elapsed = (double)(status_now.QuadPart - status_last.QuadPart) / freq_perf.QuadPart;
+//        if (elapsed > 0.5) {
+//            status_last = status_now;
+//            const char *state = squelch.in_burst ? "SIGNAL" : "ruhig ";
+//            if (squelch.have_noise_floor) {
+//                double thr = squelch.noise_floor * SQUELCH_RATIO;
+//                double ratio = squelch.smoothed_power / (thr > 0 ? thr : 1e-12);
+//                int bar_len = (int)(ratio * 20);
+//                if (bar_len > 40) bar_len = 40;
+//                if (bar_len < 0) bar_len = 0;
+//                char bar[41];
+//                memset(bar, '#', bar_len);
+//                bar[bar_len] = 0;
+//                printf("\r[%s] Pegel/Schwelle=%.2f |%-40s|   ", state, ratio, bar);
+//            } else {
+//                printf("\r[%s] Rauschboden wird kalibriert...   ", state);
+//            }
+//            fflush(stdout);
+//        }
 
         if (g_ring.overflow_count > 0) {
             fprintf(stderr, "\nWarnung: Ringpuffer-Overrun (%ld Bytes verloren).\n",
