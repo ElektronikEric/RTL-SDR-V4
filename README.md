@@ -72,7 +72,7 @@ Geplante bzw. mögliche Projekte:
 - [ ] FM-Empfang
 - [ ] ACARS-Empfang und Dekodierung
 - [x] ADS-B
-- [ ] Signal Detection
+- [x] Signal Detection
 - [ ] Machine-Learning-basierte Signalklassifikation
 
 ## Rechtlicher Hinweis
