@@ -1,0 +1,31 @@
+# Build & Debug Output
+Debug/
+Release/
+*.exe
+*.o
+*.d
+*.a
+*.lib
+*.dll
+*.exp
+
+# IDE-spezifische Dateien (Eclipse CDT)
+.cproject
+.project
+.settings/
+
+# Build-generated Dateien
+objects.mk
+sources.mk
+subdir.mk
+makefile
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.Python
+
+# Runtime/Daten-Dateien (falls nicht versioniert werden sollen)
+*.jsonl
