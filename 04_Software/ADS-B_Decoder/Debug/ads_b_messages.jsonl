@@ -648,3 +648,6 @@
 {"ok": false, "icao": "0x000000", "df": 0, "signal_strength": 0, "reason": "no_preamble"}
 {"ok": false, "icao": "0x000000", "df": 0, "signal_strength": 0, "reason": "no_preamble"}
 {"ok": false, "icao": "0x000000", "df": 0, "signal_strength": 0, "reason": "no_preamble"}
+{"icao":"000000","df":0,"sig":51}
+{"icao":"000000","df":0,"sig":57}
+{"icao":"000000","df":0,"sig":152}

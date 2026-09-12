@@ -9,6 +9,8 @@ RM := rm -rf
 # All of the sources participating in the build are defined here
 -include sources.mk
 -include src/subdir.mk
+-include objects.mk
+
 ifneq ($(MAKECMDGOALS),clean)
 ifneq ($(strip $(C_DEPS)),)
 -include $(C_DEPS)
@@ -37,7 +39,7 @@ all: main-build
 main-build: ADS-B_Decoder
 
 # Tool invocations
-ADS-B_Decoder: $(OBJS) $(USER_OBJS) makefile $(OPTIONAL_TOOL_DEPS)
+ADS-B_Decoder: $(OBJS) $(USER_OBJS) makefile objects.mk $(OPTIONAL_TOOL_DEPS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: Cross GCC Linker'
 	gcc  -o "ADS-B_Decoder" $(OBJS) $(USER_OBJS) $(LIBS)
