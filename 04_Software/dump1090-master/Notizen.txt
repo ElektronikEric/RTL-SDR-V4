@@ -1,3 +1,0 @@
-cd "/c/Users/Ruber/OneDrive/Desktop/Elektronik/RTL-SDR-V4/04_Software/dump1090-master"
-
-./dump1090.exe
