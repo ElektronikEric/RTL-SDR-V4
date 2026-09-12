@@ -72,9 +72,15 @@ Geplante bzw. mögliche Projekte:
 - [ ] FM-Empfang
 - [ ] ACARS-Empfang und Dekodierung
 - [x] ADS-B
-- [ ] Signal Detection
+- [x] Signal Detection
 - [ ] Machine-Learning-basierte Signalklassifikation
 
 ## Rechtlicher Hinweis
 
 Der RTL-SDR ist ausschließlich ein **Empfänger**. Die Nutzung und Weiterverarbeitung empfangener Funksignale muss den jeweils geltenden gesetzlichen Bestimmungen entsprechen.
+
+## Lizenz
+Dieses Projekt steht unter der [MIT-Lizenz](./LICENSE).
+   
+## Haftungsausschluss
+Bitte vor der Nutzung lesen: [DISCLAIMER.md](./DISCLAIMER.md)
